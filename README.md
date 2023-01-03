@@ -1,6 +1,14 @@
-# acapy-wallet-upgrade
+# Migration Script
 
-### How to use
+## Install
+```
+python -m venv env
+source env/bin/activate
+pip install -e .
+askar-upgrade.py ...
+```
+
+## How to use
 
 `sqlite:`
 > python ./bin/askar-upgrade.py <path-to-sqlite-db> '<database-master-password>'
