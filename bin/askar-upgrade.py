@@ -151,7 +151,7 @@ class PgConnection(DbConnection):
                 id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 reference TEXT NULL,
-                profile_key BLOB NULL,
+                profile_key BYTEA NULL,
                 PRIMARY KEY (id)
             );
             CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
@@ -161,9 +161,9 @@ class PgConnection(DbConnection):
                 id INTEGER NOT NULL,
                 profile_id INTEGER NOT NULL,
                 kind INTEGER NOT NULL,
-                category BLOB NOT NULL,
-                name BLOB NOT NULL,
-                value BLOB NOT NULL,
+                category BYTEA NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
                 expiry DATETIME NULL,
                 PRIMARY KEY (id),
                 FOREIGN KEY (profile_id) REFERENCES profiles (id)
@@ -175,8 +175,8 @@ class PgConnection(DbConnection):
             CREATE TABLE items_tags (
                 id INTEGER NOT NULL,
                 item_id INTEGER NOT NULL,
-                name BLOB NOT NULL,
-                value BLOB NOT NULL,
+                name BYTEA NOT NULL,
+                value BYTEA NOT NULL,
                 plaintext BOOLEAN NOT NULL,
                 PRIMARY KEY (id),
                 FOREIGN KEY (item_id) REFERENCES items (id)
