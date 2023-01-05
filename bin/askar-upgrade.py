@@ -117,9 +117,81 @@ class PgConnection(DbConnection):
 
     async def find_table(self, name: str) -> bool:
         """Check for existence of a table."""
+        # TODO: sqlite_master equivalent in postgres
+        found = await self._conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            (name,),
+        )
+        return (await found.fetchone())[0]
 
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
+
+        if not await self.find_table("metadata"):
+            raise UpgradeError("No metadata table found: not an Indy wallet database")
+
+        if await self.find_table("config"):
+            stmt = await self._conn.execute("SELECT name, value FROM config")
+            config = {}
+            async for row in stmt:
+                config[row[0]] = row[1]
+            return config
+
+        await self._conn.execute(
+            """
+            BEGIN EXCLUSIVE TRANSACTION;
+
+            CREATE TABLE config (
+                name TEXT NOT NULL,
+                value TEXT,
+                PRIMARY KEY (name)
+            );
+
+            CREATE TABLE profiles (
+                id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                reference TEXT NULL,
+                profile_key BLOB NULL,
+                PRIMARY KEY (id)
+            );
+            CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
+
+            ALTER TABLE items RENAME TO items_old;
+            CREATE TABLE items (
+                id INTEGER NOT NULL,
+                profile_id INTEGER NOT NULL,
+                kind INTEGER NOT NULL,
+                category BLOB NOT NULL,
+                name BLOB NOT NULL,
+                value BLOB NOT NULL,
+                expiry DATETIME NULL,
+                PRIMARY KEY (id),
+                FOREIGN KEY (profile_id) REFERENCES profiles (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE UNIQUE INDEX ix_items_uniq ON items
+                (profile_id, kind, category, name);
+
+            CREATE TABLE items_tags (
+                id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                name BLOB NOT NULL,
+                value BLOB NOT NULL,
+                plaintext BOOLEAN NOT NULL,
+                PRIMARY KEY (id),
+                FOREIGN KEY (item_id) REFERENCES items (id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE INDEX ix_items_tags_item_id ON items_tags (item_id);
+            CREATE INDEX ix_items_tags_name_enc ON items_tags
+                (name, SUBSTR(value, 1, 12)) WHERE plaintext=0;
+            CREATE INDEX ix_items_tags_name_plain ON items_tags
+                (name, value) WHERE plaintext=1;
+
+            COMMIT;
+        """,
+        )
+        return {}
 
     async def insert_profile(self, name: str, key: bytes):
         """Insert the initial profile."""
@@ -770,4 +842,4 @@ if __name__ == "__main__":
     db_pass = "mysecretpassword"
 
     conn = PgConnection(db_host, db_name, db_user, db_pass)
-    asyncio.get_event_loop().run_until_complete(upgrade(conn, db_pass))
+    asyncio.get_event_loop().run_until_complete(upgrade(conn, "insecure"))
