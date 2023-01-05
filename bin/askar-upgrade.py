@@ -127,8 +127,20 @@ class PgConnection(DbConnection):
     async def finish_upgrade(self):
         """Complete the upgrade."""
 
-    async def fetch_one(self, sql: str, optional: bool = False):
+    async def fetch_one(self, postgres: str, optional: bool = False):
         """Fetch a single row from the database."""
+        stmt: str = await self._conn.fetch(postgres)
+        found = None
+        for row in stmt:
+            decoded = (base64.b64decode(bytes.decode(row[0])),)
+            if found is None:
+                found = decoded
+            else:
+                raise Exception("Found duplicate row")
+        if optional or found:
+            return found
+        else:
+            raise Exception("Row not found")
 
     async def fetch_pending_items(self, limit: int):
         """Fetch un-updated items."""
@@ -265,7 +277,7 @@ class SqliteConnection(DbConnection):
 
     async def fetch_one(self, sql: str, optional: bool = False):
         """Fetch a single row from the database."""
-        stmt = await self._conn.execute(sql)
+        stmt: aiosqlite.cursor.Cursor = await self._conn.execute(sql)
         found = None
         async for row in stmt:
             if found is None:
@@ -326,10 +338,7 @@ class SqliteConnection(DbConnection):
 async def fetch_indy_key(conn: DbConnection, key_pass: str) -> dict:
     metadata_row = await conn.fetch_one("SELECT value FROM metadata")
     metadata_value = metadata_row[0]
-    if conn.DB_TYPE == "pgsql":
-        metadata_json = base64.b64decode(metadata_value)
-    else:
-        metadata_json = metadata_value
+    metadata_json = metadata_value
     metadata = json.loads(metadata_json)
     keys_enc = bytes(metadata["keys"])
     salt = bytes(metadata["master_key_salt"])
@@ -755,11 +764,10 @@ async def upgrade(db: DbConnection, master_pw: str):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARN)
 
-    if len(sys.argv) < 2:
-        raise SystemExit("Missing database URL")
-    if len(sys.argv) < 3:
-        raise SystemExit("Missing database master password")
+    db_host = "localhost"
+    db_name = "alice"
+    db_user = "postgres"
+    db_pass = "mysecretpassword"
 
-    conn = SqliteConnection(sys.argv[1])
-    key = sys.argv[2]  # Faber.Agent372766
-    asyncio.get_event_loop().run_until_complete(upgrade(conn, key))
+    conn = PgConnection(db_host, db_name, db_user, db_pass)
+    asyncio.get_event_loop().run_until_complete(upgrade(conn, db_pass))
