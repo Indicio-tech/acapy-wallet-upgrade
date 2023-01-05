@@ -142,60 +142,93 @@ class PgConnection(DbConnection):
                 config[row[0]] = row[1]
             return config
 
-        await self._conn.execute(
-            """
-            BEGIN EXCLUSIVE TRANSACTION;
+        async with self._conn.transaction():
 
-            CREATE TABLE config (
-                name TEXT NOT NULL,
-                value TEXT,
-                PRIMARY KEY (name)
-            );
+            await self._conn.execute(
+                """
+                CREATE TABLE config (
+                    name TEXT NOT NULL,
+                    value TEXT,
+                    PRIMARY KEY (name)
+                );
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE TABLE profiles (
+                    id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    reference TEXT NULL,
+                    profile_key BYTEA NULL,
+                    PRIMARY KEY (id)
+                );
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
+                """
+            )
+            await self._conn.execute(
+                """
+                ALTER TABLE items RENAME TO items_old;
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE TABLE items (
+                    id INTEGER NOT NULL,
+                    profile_id INTEGER NOT NULL,
+                    kind INTEGER NOT NULL,
+                    category BYTEA NOT NULL,
+                    name BYTEA NOT NULL,
+                    value BYTEA NOT NULL,
+                    expiry TIMESTAMP NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY (profile_id) REFERENCES profiles (id)
+                        ON DELETE CASCADE ON UPDATE CASCADE
+                );
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE UNIQUE INDEX ix_items_uniq ON items
+                    (profile_id, kind, category, name);
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE TABLE items_tags (
+                    id INTEGER NOT NULL,
+                    item_id INTEGER NOT NULL,
+                    name BYTEA NOT NULL,
+                    value BYTEA NOT NULL,
+                    plaintext BOOLEAN NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY (item_id) REFERENCES items (id)
+                        ON DELETE CASCADE ON UPDATE CASCADE
+                );
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE INDEX ix_items_tags_item_id ON items_tags (item_id);
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE INDEX ix_items_tags_name_enc ON items_tags
+                    (name, SUBSTR(value, 1, 12)) WHERE plaintext=False;
+                """
+            )
+            await self._conn.execute(
+                """
+                CREATE INDEX ix_items_tags_name_plain ON items_tags
+                    (name, value) WHERE plaintext=True;
 
-            CREATE TABLE profiles (
-                id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                reference TEXT NULL,
-                profile_key BYTEA NULL,
-                PRIMARY KEY (id)
-            );
-            CREATE UNIQUE INDEX ix_profile_name ON profiles (name);
-
-            ALTER TABLE items RENAME TO items_old;
-            CREATE TABLE items (
-                id INTEGER NOT NULL,
-                profile_id INTEGER NOT NULL,
-                kind INTEGER NOT NULL,
-                category BYTEA NOT NULL,
-                name BYTEA NOT NULL,
-                value BYTEA NOT NULL,
-                expiry DATETIME NULL,
-                PRIMARY KEY (id),
-                FOREIGN KEY (profile_id) REFERENCES profiles (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            );
-            CREATE UNIQUE INDEX ix_items_uniq ON items
-                (profile_id, kind, category, name);
-
-            CREATE TABLE items_tags (
-                id INTEGER NOT NULL,
-                item_id INTEGER NOT NULL,
-                name BYTEA NOT NULL,
-                value BYTEA NOT NULL,
-                plaintext BOOLEAN NOT NULL,
-                PRIMARY KEY (id),
-                FOREIGN KEY (item_id) REFERENCES items (id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            );
-            CREATE INDEX ix_items_tags_item_id ON items_tags (item_id);
-            CREATE INDEX ix_items_tags_name_enc ON items_tags
-                (name, SUBSTR(value, 1, 12)) WHERE plaintext=0;
-            CREATE INDEX ix_items_tags_name_plain ON items_tags
-                (name, value) WHERE plaintext=1;
-
-            COMMIT;
-        """,
-        )
+                COMMIT;
+            """,
+            )
         return {}
 
     async def insert_profile(self, name: str, key: bytes):
