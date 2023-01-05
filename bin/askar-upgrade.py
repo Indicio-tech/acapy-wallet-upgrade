@@ -117,12 +117,17 @@ class PgConnection(DbConnection):
 
     async def find_table(self, name: str) -> bool:
         """Check for existence of a table."""
-        # TODO: sqlite_master equivalent in postgres
-        found = await self._conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
-            (name,),
+        found = await self._conn.fetch(
+            """
+                SELECT EXISTS
+                (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = $1
+                )
+            """,
+            name,
         )
-        return (await found.fetchone())[0]
+        return found[0][0]
 
     async def pre_upgrade(self) -> dict:
         """Add new tables and columns."""
