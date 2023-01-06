@@ -28,7 +28,7 @@ if __name__ == "__main__":
             "msgpack~=1.0",
             "pynacl~=1.4",
         ],
-        python_requires=">=3.6.3",
+        python_requires=">=3.7",
         classifiers=[
             "Programming Language :: Python :: 3",
             "License :: OSI Approved :: Apache Software License",

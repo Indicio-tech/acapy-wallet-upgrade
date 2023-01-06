@@ -465,4 +465,4 @@ if __name__ == "__main__":
     db_pass = "mysecretpassword"
 
     conn = PgConnection(db_host, db_name, db_user, db_pass)
-    asyncio.get_event_loop().run_until_complete(upgrade(conn, "insecure"))
+    asyncio.run(upgrade(conn, "insecure"))
