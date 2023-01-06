@@ -18,10 +18,10 @@ import cbor2
 import msgpack
 import nacl.pwhash
 
-from aries_askar_upgrade.db_connection import DbConnection
-from aries_askar_upgrade.sqlite_connection import SqliteConnection
-from aries_askar_upgrade.pg_connection import PgConnection
-from aries_askar_upgrade.error import UpgradeError
+from .db_connection import DbConnection
+from .sqlite_connection import SqliteConnection
+from .pg_connection import PgConnection
+from .error import UpgradeError
 
 
 CHACHAPOLY_KEY_LEN = 32
@@ -456,7 +456,7 @@ async def upgrade(db: DbConnection, master_pw: str):
     print("done")
 
 
-if __name__ == "__main__":
+def main():
     logging.basicConfig(level=logging.WARN)
 
     db_host = "localhost"
@@ -466,3 +466,7 @@ if __name__ == "__main__":
 
     conn = PgConnection(db_host, db_name, db_user, db_pass)
     asyncio.get_event_loop().run_until_complete(upgrade(conn, "insecure"))
+
+
+if __name__ == "__main__":
+    main()
