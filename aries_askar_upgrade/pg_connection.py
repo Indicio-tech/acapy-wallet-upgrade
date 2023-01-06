@@ -65,9 +65,9 @@ class PgConnection(DbConnection):
             raise UpgradeError("No metadata table found: not an Indy wallet database")
 
         if await self.find_table("config"):
-            stmt = await self._conn.execute("SELECT name, value FROM config")
+            stmt = await self._conn.fetch("SELECT name, value FROM config")
             config = {}
-            async for row in stmt:
+            for row in stmt:
                 config[row[0]] = row[1]
             return config
 
