@@ -160,8 +160,20 @@ class PgConnection(DbConnection):
             )
         return {}
 
-    async def insert_profile(self, name: str, key: bytes):
+    async def insert_profile(self, pass_key: str, name: str, key: bytes):
         """Insert the initial profile."""
+        await self._conn.executemany(
+            "INSERT INTO config (name, value) VALUES ($1, $2)",
+            [
+                ("default_profile", name),
+                ("key", pass_key),
+            ],
+        )
+        await self._conn.execute(
+            "INSERT INTO profiles (name, profile_key) VALUES ($1, $2)",
+            (name, key),
+        )
+        await self._conn.commit()
 
     async def finish_upgrade(self):
         """Complete the upgrade."""
