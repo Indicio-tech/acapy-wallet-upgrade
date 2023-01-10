@@ -1,7 +1,9 @@
 """Indy wallet upgrade."""
 
+
 import asyncio
 import base64
+import contextlib
 import json
 import hashlib
 import hmac
@@ -178,6 +180,7 @@ def decrypt_merged(enc_value: bytes, key: bytes, b64: bool = False) -> bytes:
 
     if b64:
         enc_value = base64.b64decode(enc_value)
+
     nonce, ciphertext = (
         enc_value[:CHACHAPOLY_NONCE_LEN],
         enc_value[CHACHAPOLY_NONCE_LEN:],
@@ -216,21 +219,25 @@ def decrypt_item(row: tuple, keys: dict, b64: bool = False):
     row_id, row_type, row_name, row_value, row_key, tags_enc, tags_plain = row
     value_key = decrypt_merged(row_key, keys["value"])
     value = decrypt_merged(row_value, value_key) if row_value else None
-    tags = []
-    for k, v in (
-        decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"]) if tags_enc else ()
-    ):
-        tags.append((0, k, v))
+    tags = [
+        (0, k, v)
+        for k, v in (
+            (
+                decrypt_tags(tags_enc, keys["tag_name"], keys["tag_value"])
+                if tags_enc
+                else ()
+            )
+        )
+    ]
     for k, v in decrypt_tags(tags_plain, keys["tag_name"]) if tags_plain else ():
         tags.append((1, k, v))
-    result = {
+    return {
         "id": row_id,
         "type": decrypt_merged(row_type, keys["type"], b64),
         "name": decrypt_merged(row_name, keys["name"], b64),
         "value": value,
         "tags": tags,
     }
-    return result
 
 
 def update_item(item: dict, key: dict) -> dict:
@@ -352,11 +359,8 @@ async def post_upgrade(uri: str, master_pw: str):
                 if meta:
                     await txn.remove("Indy::DidMetadata", meta.name)
                     meta = json.loads(meta.value)["value"]
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         meta = json.loads(meta)
-                    except json.JSONDecodeError:
-                        # leave as a string
-                        pass
                 await txn.insert(
                     "did",
                     row.name,
